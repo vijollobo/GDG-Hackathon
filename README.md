@@ -86,3 +86,27 @@ Before running this application, you'll need:
 ## License
 
 Please respect the licensing terms of all the services and models used in this project, particularly the Mistral model from Hugging Face.
+
+## Future Work: BERT-Based Profanity Detection
+
+Alongside our current rephrasing pipeline using the Perspective API, we're actively working on training a BERT-based model to detect profanity using the **Jigsaw** dataset.
+
+### Why We're Doing This
+
+- **Independence**: Reduces reliance on third-party APIs.
+- **Speed**: Optimized for faster, on-device inference.
+- **Customization**: Allows domain-specific tuning.
+- **Contextual Limitations**: Current pretrained models on Hugging Face often fail to accurately interpret sarcasm in nuanced or contextual situations — our approach aims to improve this through fine-tuned contextual training.
+
+### Dataset
+
+We're using a cleaned subset of the **Jigsaw Toxic Comment Classification Challenge** data, saved as `Data_Set.csv`. It includes a wide variety of toxic, obscene, and offensive examples useful for fine-tuning.
+
+### Objectives
+
+- Fine-tune `bert-base-uncased` to identify profane and aggressive language.
+- Incorporate the model directly into our current application pipeline.
+- Eventually replace Perspective API for more scalable deployment.
+
+This future direction supports our mission of creating a modular, self-contained, and transparent NLP moderation pipeline.
+
