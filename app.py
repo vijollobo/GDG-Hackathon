@@ -205,7 +205,7 @@ def load_rephrasing_model(use_lighter=True):
             model = AutoModelForCausalLM.from_pretrained(
                 model_id,
                 quantization_config=quantization_config,
-                device_map="auto",
+                device_map={"": 0},
                 torch_dtype=torch.float16,
                 low_cpu_mem_usage=True
             )
@@ -329,7 +329,7 @@ def analyze_toxicity(text, api_key, timeout=10):
 
 def rephrase_content(text, _model, _tokenizer, max_new_tokens=150):
     """
-    Rephrases content using the loaded model with improved prompting.
+    Rephrases content using the loaded model with improved prompting (few-shot).
     
     Args:
         text: The input text to rephrase
@@ -344,34 +344,59 @@ def rephrase_content(text, _model, _tokenizer, max_new_tokens=150):
         return "Rephrasing not available. Please check model loading status."
     
     try:
-        # More effective prompt template for better results
+        # --- Start Prompt Modification ---
+
+        # Define examples to guide the model
+        few_shot_examples = """
+Here are examples of how to rewrite text:
+
+Example 1:
+Original text: "That idea is retarded."
+Rewritten version: "That idea is not well-thought-out."
+
+Example 2:
+Original text: "What the hell are you doing, you idiot?"
+Rewritten version: "Could you please explain what you are doing?"
+
+Example 3:
+Original text: "Hey you stupid jerk."
+Rewritten version: "Hello there." 
+""" # Note: For extreme slurs, replacing with a simple greeting might be more achievable/safer.
+
+        # Define the core instruction
+        instruction = f"""Your primary task is to rewrite the 'Original text' below to be neutral, respectful, and safe for a general audience. Replace any offensive, toxic, slurs, or inappropriate language with suitable neutral alternatives. Try to preserve the original meaning and formality if possible without repeating the offensive content.
+
+{few_shot_examples}
+Now, perform the rewrite for the following text:
+Original text: "{text}"
+Rewritten version:"""
+
+        # Use chat template if available (Recommended for Mistral Instruct)
         if hasattr(_tokenizer, 'apply_chat_template'):
-            messages = [{
-                "role": "user", 
-                "content": f"""Rewrite the following text using more appropriate language that preserves the core meaning. Replace any offensive, toxic, or inappropriate language with suitable alternatives. Maintain the same level of formality and tone where possible.
-
-Original text: "{text}"
-
-Rewritten version:"""
-            }]
+            messages = [{"role": "user", "content": instruction}]
             prompt = _tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            # Optional: Print the exact prompt being sent for debugging
+            # print("--- Prompt Sent to Model ---")
+            # print(prompt)
+            # print("--------------------------")
         else:
-            prompt = f"""Rewrite the following text using more appropriate language that preserves the core meaning. Replace any offensive, toxic, or inappropriate language with suitable alternatives. Maintain the same level of formality and tone where possible.
+            # Basic fallback if chat template isn't available
+            prompt = instruction 
+            # Optional: Add [INST] markers manually if needed for non-template use
+            # prompt = f"[INST] {instruction} [/INST]" 
 
-Original text: "{text}"
-
-Rewritten version:"""
+        # --- End Prompt Modification ---
 
         # Prepare inputs and generate with better parameters
         inputs = _tokenizer(prompt, return_tensors="pt").to(_model.device)
         
         with torch.no_grad():
-            # More stable generation parameters
+            # Consider slightly lower temperature for less randomness / more focus
             outputs = _model.generate(
                 **inputs, 
                 max_new_tokens=max_new_tokens,
                 do_sample=True,
-                temperature=0.7,
+                temperature=0.5, # Lowered temperature
                 top_p=0.9,
                 top_k=50,
                 repetition_penalty=1.2,
@@ -379,15 +404,30 @@ Rewritten version:"""
             )
         
         # Extract only the generated part
+        # Important: Ensure you correctly identify the start of the generated text
+        # This depends on whether the prompt itself was included in the output tensor
+        
+        # Method 1: If prompt IS included in output
         generated_ids = outputs[0][inputs['input_ids'].shape[1]:]
+        
+        # Method 2: If prompt IS NOT included in output (less common with generate)
+        # generated_ids = outputs[0] 
+        
         rephrased_text = _tokenizer.decode(generated_ids, skip_special_tokens=True)
         
-        # Clean up the output
-        return rephrased_text.strip()
+        # Clean up the output - remove potential prompt echoes if necessary
+        # Sometimes the model might still repeat the last part of the prompt ("Rewritten version:")
+        rephrased_text = rephrased_text.replace('Rewritten version:', '').strip()
+        
+        return rephrased_text
+
     except torch.cuda.OutOfMemoryError:
-        return "Error: Out of memory. Try using the lighter model option."
+        return "Error: Out of memory during generation. Input might be too long or model requires more VRAM."
     except Exception as e:
-        return f"Error during rephrasing: {str(e)}"
+        # Add more detail to the error
+        import traceback
+        tb_str = traceback.format_exc()
+        return f"Error during rephrasing: {str(e)}\nTraceback:\n{tb_str}"
 
 def combine_and_analyze(
     text, 
