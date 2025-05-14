@@ -2,6 +2,8 @@
 
 This repository contains a text rephrasing application powered by the `mistralai/Mistral-7B-Instruct-v0.2` model and `Perspective API`. The application is a brief demonstartion of our goal of creating a model capable of detecting and *rephrasing* online profanity (mainly **textual**) and *rephrase* them in a *neutral sence* while preserving the *original message*.
 
+<h1 style="color:red"> <b>NOTE:</b>: As of May 14, 2025, our cloud costs exceeded ₹9,000  significantly higher than our originally estimated budget. The majority of this expense stemmed from Compute Engine usage in the us-central1 region. Given this unanticipated cost surge and limited funding, continuing the service was no longer feasible and hence we had to take our MVP Link down.</h1>
+
 ## Overview
 
 The project consists of:
